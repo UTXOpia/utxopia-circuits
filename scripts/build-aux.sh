@@ -12,7 +12,7 @@
 #   bash scripts/build-aux.sh ownership
 #   bash scripts/build-aux.sh proof_of_innocence
 #
-# Requires: circom 2.x, npx snarkjs, and circuits/build/ptau/powersOfTau28_hez_final_18.ptau
+# Requires: circom 2.x, npx snarkjs, and build/ptau/powersOfTau28_hez_final_18.ptau
 # (the existing ptau file is enough for circuits up to 2^18 constraints).
 
 set -e

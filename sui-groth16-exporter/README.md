@@ -11,8 +11,8 @@ References:
 ## Export A Verification Key
 
 ```bash
-cargo run --manifest-path tools/sui-groth16-exporter/Cargo.toml -- \
-  vkey --input circuits/build/joinsplit_2x2/joinsplit_2x2.vkey.json
+cargo run --manifest-path sui-groth16-exporter/Cargo.toml -- \
+  vkey --input build/joinsplit_2x2/joinsplit_2x2.vkey.json
 ```
 
 Output:
@@ -31,7 +31,7 @@ Use `rawVerifyingKey` with `verifier::register_raw_key`; the Sui contract calls
 ## Export A Proof
 
 ```bash
-cargo run --manifest-path tools/sui-groth16-exporter/Cargo.toml -- \
+cargo run --manifest-path sui-groth16-exporter/Cargo.toml -- \
   proof --proof proof.json --public public.json
 ```
 
