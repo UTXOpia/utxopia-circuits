@@ -1,5 +1,5 @@
 #!/bin/bash
-# Compile JoinSplit circom circuit variants
+# Compile optimized JoinSplit circom circuit variants
 # Requires circom v2.1.0+ installed: https://docs.circom.io/getting-started/installation/
 #
 # Usage:
@@ -72,6 +72,7 @@ for circuit in "${CIRCUITS[@]}"; do
     --r1cs \
     --wasm \
     --sym \
+    --O2 \
     -o "$CIRCUIT_BUILD" \
     -l "$ROOT_DIR/node_modules"
 

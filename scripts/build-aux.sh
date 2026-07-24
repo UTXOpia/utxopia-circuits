@@ -50,6 +50,7 @@ echo ""
 echo "--- 1/4 Compile circom -> r1cs + wasm ---"
 circom "$CIRCOM_FILE" \
   --r1cs --wasm --sym \
+  --O2 \
   -l "$ROOT_DIR/node_modules" \
   -o "$BUILD_DIR"
 
