@@ -6,7 +6,9 @@
 #   bash scripts/setup.sh             # Setup tier-1 (default)
 #   bash scripts/setup.sh --tier1     # Same as default
 #   bash scripts/setup.sh --tier2     # Tier-1 + additional variants
+#   bash scripts/setup.sh --supported # All variants accepted by the Solana program
 #   bash scripts/setup.sh --all       # All compiled variants
+#   bash scripts/setup.sh --circuit joinsplit_1x2
 #
 # Requires: npx snarkjs
 
@@ -14,12 +16,13 @@ set -e
 
 # Pre-flight checks
 command -v npx >/dev/null 2>&1 || { echo "Error: npx not found. Install Node.js first."; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "Error: node not found. Install Node.js first."; exit 1; }
 # snarkjs --version exits 99 (unrecognized flag), so probe with a harmless real command
 npx snarkjs 2>&1 | grep -q "^snarkjs@" || { echo "Error: snarkjs not installed. Run: npm install -g snarkjs"; exit 1; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
-BUILD_DIR="$ROOT_DIR/build"
+BUILD_DIR="${UTXOPIA_CIRCUITS_BUILD_DIR:-$ROOT_DIR/build}"
 PTAU_DIR="$BUILD_DIR/ptau"
 
 TIER="${1:---tier1}"
@@ -28,11 +31,33 @@ TIER="${1:---tier1}"
 source "$SCRIPT_DIR/tiers.sh"
 
 case "$TIER" in
+  --circuit)
+    if [[ "${2:-}" =~ ^joinsplit_([0-9]+)x([0-9]+)$ ]] &&
+      (( BASH_REMATCH[1] >= 1 && BASH_REMATCH[2] >= 1 &&
+         BASH_REMATCH[1] + BASH_REMATCH[2] <= MAX_SAFE_JOINSPLIT_SIZE )); then
+      CIRCUITS=("$2")
+    else
+      echo "Invalid or unsupported circuit: ${2:-missing}" >&2
+      exit 1
+    fi
+    ;;
   --tier1)
     CIRCUITS=("${TIER1_CIRCUITS[@]}")
     ;;
   --tier2)
     CIRCUITS=("${TIER2_CIRCUITS[@]}")
+    ;;
+  --supported)
+    CIRCUITS=()
+    for d in "$BUILD_DIR"/joinsplit_*/; do
+      [ -d "$d" ] || continue
+      name=$(basename "$d")
+      if [[ "$name" =~ ^joinsplit_([0-9]+)x([0-9]+)$ ]] &&
+        (( BASH_REMATCH[1] + BASH_REMATCH[2] <= MAX_SAFE_JOINSPLIT_SIZE )) &&
+        [ -f "$d/${name}.r1cs" ]; then
+        CIRCUITS+=("$name")
+      fi
+    done
     ;;
   --all)
     # Discover all compiled variants (those with .r1cs files)
@@ -47,28 +72,32 @@ case "$TIER" in
     ;;
   *)
     echo "Unknown tier: $TIER"
-    echo "Usage: bash scripts/setup.sh [--tier1 | --tier2 | --all]"
+    echo "Usage: bash scripts/setup.sh [--tier1 | --tier2 | --supported | --all | --circuit joinsplit_NxM]"
     exit 1
     ;;
 esac
 
-# Powers of Tau size (2^18 = 262144 constraints — EdDSA-Poseidon adds ~5K constraints)
-PTAU_POWER=18
+# Powers of Tau size. O2 JoinSplit variants in the audited Solana scope fit in
+# 2^16; callers can raise this for larger auxiliary circuits.
+PTAU_POWER="${UTXOPIA_PTAU_POWER:-16}"
 
 echo "=== Groth16 Trusted Setup for ${#CIRCUITS[@]} variants ($TIER) ==="
 
 # Phase 1: Powers of Tau — use Hermez ceremony (54 contributors, production-grade)
 mkdir -p "$PTAU_DIR"
 HERMEZ_PTAU="$PTAU_DIR/powersOfTau28_hez_final_${PTAU_POWER}.ptau"
-PTAU_FILE="$HERMEZ_PTAU"
+PTAU_FILE="${UTXOPIA_PTAU_FILE:-$HERMEZ_PTAU}"
 
-if [ ! -f "$HERMEZ_PTAU" ]; then
+if [ ! -f "$PTAU_FILE" ] && [ -n "${UTXOPIA_PTAU_FILE:-}" ]; then
+  echo "Configured PTAU does not exist: $PTAU_FILE" >&2
+  exit 1
+elif [ ! -f "$PTAU_FILE" ]; then
   echo ""
   echo "--- Phase 1: Downloading Hermez Powers of Tau (2^${PTAU_POWER}, 54 contributors) ---"
   curl -L -o "$HERMEZ_PTAU" "https://storage.googleapis.com/zkevm/ptau/powersOfTau28_hez_final_${PTAU_POWER}.ptau"
   echo "  PTAU: $HERMEZ_PTAU"
 else
-  echo "Using existing Hermez PTAU: $HERMEZ_PTAU"
+  echo "Using existing Hermez PTAU: $PTAU_FILE"
 fi
 
 # Phase 2: Circuit-specific setup
@@ -84,10 +113,17 @@ for circuit in "${CIRCUITS[@]}"; do
     echo "  SKIP: R1CS not found (run compile.sh first)"
     continue
   fi
+  if [ "${UTXOPIA_SETUP_RESUME:-0}" = "1" ] && [ -f "$ZKEY" ] && [ -f "$VKEY" ]; then
+    echo "  SKIP: completed artifacts already exist"
+    continue
+  fi
 
   # Generate zkey
   npx snarkjs groth16 setup "$R1CS" "$PTAU_FILE" "$BUILD_DIR/$circuit/${circuit}_0000.zkey"
-  npx snarkjs zkey contribute "$BUILD_DIR/$circuit/${circuit}_0000.zkey" "$ZKEY" --name="Circuit contribution" -v -e="random entropy for ${circuit}"
+  node "$SCRIPT_DIR/contribute-zkey.mjs" \
+    "$BUILD_DIR/$circuit/${circuit}_0000.zkey" \
+    "$ZKEY" \
+    "UTXOpia devnet O2 migration"
 
   # Export verification key
   npx snarkjs zkey export verificationkey "$ZKEY" "$VKEY"

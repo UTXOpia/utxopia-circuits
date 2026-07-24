@@ -6,6 +6,7 @@
 #   bash scripts/compile.sh             # Compile tier-1 (default: 1x1, 1x2, 2x1, 2x2)
 #   bash scripts/compile.sh --tier1     # Same as default
 #   bash scripts/compile.sh --tier2     # Tier-1 + 1x3, 3x1, 2x3, 3x2, 1x4, 4x1
+#   bash scripts/compile.sh --supported # All variants accepted by the Solana program
 #   bash scripts/compile.sh --all       # All 91 variants
 
 set -e
@@ -15,7 +16,7 @@ command -v circom >/dev/null 2>&1 || { echo "Error: circom not installed. See ht
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
-BUILD_DIR="$ROOT_DIR/build"
+BUILD_DIR="${UTXOPIA_CIRCUITS_BUILD_DIR:-$ROOT_DIR/build}"
 GENERATED_DIR="$ROOT_DIR/circom/generated"
 
 TIER="${1:---tier1}"
@@ -30,6 +31,17 @@ case "$TIER" in
   --tier2)
     CIRCUITS=("${TIER2_CIRCUITS[@]}")
     ;;
+  --supported)
+    CIRCUITS=()
+    for f in "$GENERATED_DIR"/joinsplit_*.circom; do
+      [ -f "$f" ] || continue
+      name=$(basename "$f" .circom)
+      if [[ "$name" =~ ^joinsplit_([0-9]+)x([0-9]+)$ ]] &&
+        (( BASH_REMATCH[1] + BASH_REMATCH[2] <= MAX_SAFE_JOINSPLIT_SIZE )); then
+        CIRCUITS+=("$name")
+      fi
+    done
+    ;;
   --all)
     # Discover all generated variant files
     CIRCUITS=()
@@ -41,7 +53,7 @@ case "$TIER" in
     ;;
   *)
     echo "Unknown tier: $TIER"
-    echo "Usage: bash scripts/compile.sh [--tier1 | --tier2 | --all]"
+    echo "Usage: bash scripts/compile.sh [--tier1 | --tier2 | --supported | --all]"
     exit 1
     ;;
 esac

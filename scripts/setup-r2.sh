@@ -13,7 +13,7 @@ set -euo pipefail
 
 BUCKET="${R2_BUCKET:-utxopia-circuits}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SRC="$ROOT/cdn-upload"
+SRC="${UTXOPIA_CDN_STAGE_DIR:-$ROOT/cdn-upload}"
 
 command -v rclone >/dev/null 2>&1 || { echo "Install rclone first:  brew install rclone"; exit 1; }
 : "${R2_ACCOUNT_ID:?set R2_ACCOUNT_ID}"
@@ -27,7 +27,7 @@ RC=(--s3-provider Cloudflare --s3-access-key-id "$R2_ACCESS_KEY_ID"
     --s3-no-check-bucket)
 
 echo "Uploading $(du -sh "$SRC" | cut -f1) → r2:${BUCKET} ($ENDPOINT)"
-rclone sync "$SRC/" ":s3:${BUCKET}/" "${RC[@]}" \
+rclone copy "$SRC/" ":s3:${BUCKET}/" "${RC[@]}" \
   --header-upload "Cache-Control: public, max-age=31536000, immutable" \
   --transfers 8 --checkers 16 --progress
 
@@ -37,4 +37,4 @@ echo "  1. R2 → ${BUCKET} → Settings → Custom Domains → Connect 'circuit
 echo "  2. R2 → ${BUCKET} → Settings → CORS → allow GET/HEAD from your web origins"
 echo "  3. Web env: NEXT_PUBLIC_CIRCUIT_CDN_URL=https://circuit.utxopia.com  (then redeploy)"
 echo ""
-echo "Verify:  curl -I https://circuit.utxopia.com/circuits/groth16/joinsplit_2x2/joinsplit_2x2.vkey.json"
+echo "Verify the exact versioned URL staged in ${SRC}."

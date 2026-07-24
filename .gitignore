@@ -8,6 +8,8 @@ build/*
 build/joinsplit_*/*
 !build/joinsplit_*/*.vkey.json
 cdn-upload/
+build-*/
+cdn-upload-*/
 
 # Misc
 .DS_Store

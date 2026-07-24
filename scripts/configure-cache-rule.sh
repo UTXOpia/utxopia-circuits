@@ -106,7 +106,8 @@ else
   fi
 fi
 
-VERIFY_URL="https://${CDN_HOST}/circuits/groth16/joinsplit_1x1/joinsplit_1x1.vkey.json"
+VERIFY_PATH="${CIRCUIT_CDN_VERIFY_PATH:-/circuits/v2/groth16/joinsplit_1x1/joinsplit_1x1.vkey.json}"
+VERIFY_URL="https://${CDN_HOST}${VERIFY_PATH}"
 echo "Warming and checking ${VERIFY_URL}"
 for attempt in 1 2; do
   cache_status="$(
