@@ -138,13 +138,12 @@ function generateValidInputs(nInputs, nOutputs, privateKey) {
   // Sign
   const sig = signMessage(privateKey, msgHash);
 
-  // Get Merkle proofs for each input
+  // The circuit derives path-direction bits from leavesIndices, so only the
+  // sibling elements are passed (no pathIndices input).
   const pathElements = [];
-  const pathIndices = [];
   for (let i = 0; i < nInputs; i++) {
     const proof = getMerkleProof(tree, i, TREE_DEPTH);
     pathElements.push(proof.pathElements.map(String));
-    pathIndices.push(proof.pathIndices);
   }
 
   return {
@@ -159,7 +158,6 @@ function generateValidInputs(nInputs, nOutputs, privateKey) {
     randomIn: inputNotes.map((n) => String(n.random)),
     valueIn: inputNotes.map((n) => String(n.amount)),
     pathElements,
-    pathIndices,
     leavesIndices: inputNotes.map((_, i) => String(i)),
     npkOut: outputNotes.map((n) => String(n.npk)),
     valueOut: outputNotes.map((n) => String(n.amount)),
@@ -241,6 +239,39 @@ describe("JoinSplit Circuits — Tier 1", function () {
           expect(err.message).to.include("Error");
         }
       });
+
+      // Forged leaf index (≠ proven Merkle path) must be rejected: recompute the
+      // nullifier and re-sign so only the leafIndex↔path binding is violated.
+      it("should reject a forged leafIndex that does not match the Merkle path", async function () {
+        const inputs = generateValidInputs(nInputs, nOutputs, privateKey);
+        const forgedIndex = BigInt(inputs.leavesIndices[0]) + 1n;
+        inputs.leavesIndices[0] = String(forgedIndex);
+
+        const nullifyingKey = BigInt(inputs.nullifyingKey);
+        const nullifiers = inputs.nullifiers.map((n) => BigInt(n));
+        nullifiers[0] = computeNullifier(nullifyingKey, forgedIndex);
+        inputs.nullifiers = nullifiers.map(String);
+
+        // Re-sign over the updated message hash so the EdDSA check still passes.
+        const msgInputs = [
+          BigInt(inputs.merkleRoot),
+          BigInt(inputs.boundParamsHash),
+          ...nullifiers,
+          ...inputs.commitmentsOut.map((c) => BigInt(c)),
+        ];
+        const sig = signMessage(privateKey, poseidonHash(msgInputs));
+        inputs.signature = [String(sig.R8x), String(sig.R8y), String(sig.S)];
+
+        try {
+          await circuit.calculateWitness(inputs);
+          expect.fail("should have rejected forged leafIndex (double-spend)");
+        } catch (err) {
+          expect(err.message).to.include("Error");
+        }
+      });
+
+      // Duplicate input notes are rejected on-chain (identical nullifiers), not
+      // in-circuit by design — no distinctness test here.
     });
   }
 });

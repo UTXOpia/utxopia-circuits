@@ -3,6 +3,7 @@ pragma circom 2.1.0;
 include "circomlib/circuits/poseidon.circom";
 include "circomlib/circuits/comparators.circom";
 include "circomlib/circuits/babyjub.circom";
+include "circomlib/circuits/bitify.circom";
 include "./lib/merkle.circom";
 include "./lib/mpk.circom";
 include "./lib/joinsplit_commitment.circom";
@@ -61,7 +62,6 @@ template RangeSum(n, treeDepth) {
     signal input randomIn[n];
     signal input valueIn[n];
     signal input pathElements[n][treeDepth];
-    signal input pathIndices[n][treeDepth];
     signal input viewerNonce;
     signal input commitmentsIn[n];
 
@@ -77,6 +77,7 @@ template RangeSum(n, treeDepth) {
     // 2 & 3. per-note commitment binding + Merkle inclusion
     component npkHasher[n];
     component commitmentCheck[n];
+    component leafBits[n];
     component verifier[n];
     for (var i = 0; i < n; i++) {
         npkHasher[i] = Poseidon(2);
@@ -89,11 +90,16 @@ template RangeSum(n, treeDepth) {
         commitmentCheck[i].amount <== valueIn[i];
         commitmentsIn[i] === commitmentCheck[i].commitment;
 
+        // Derive path-direction bits from the public leafIndices[i] (Num2Bits
+        // binds the value), tying the attested index to the proven note position.
+        leafBits[i] = Num2Bits(treeDepth);
+        leafBits[i].in <== leafIndices[i];
+
         verifier[i] = MerkleProofVerifier(treeDepth);
         verifier[i].leaf <== commitmentsIn[i];
         for (var j = 0; j < treeDepth; j++) {
             verifier[i].path_elements[j] <== pathElements[i][j];
-            verifier[i].path_indices[j] <== pathIndices[i][j];
+            verifier[i].path_indices[j] <== leafBits[i].out[j];
         }
         verifier[i].root === merkleRoot;
     }

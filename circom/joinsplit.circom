@@ -68,7 +68,8 @@ template JoinSplit(nInputs, nOutputs, treeDepth) {
     signal input randomIn[nInputs];
     signal input valueIn[nInputs];
     signal input pathElements[nInputs][treeDepth];
-    signal input pathIndices[nInputs][treeDepth];
+    // Leaf position per input; Merkle path-direction bits are derived from this
+    // (Num2Bits below) so the nullifier's index can't diverge from the proven path.
     signal input leavesIndices[nInputs];
 
     // Per-output note data
@@ -88,6 +89,7 @@ template JoinSplit(nInputs, nOutputs, treeDepth) {
     // ============================
     component inputNpkHashers[nInputs];
     component inputCommitments[nInputs];
+    component inputLeafBits[nInputs];
     component inputMerkle[nInputs];
     component inputNullifiers[nInputs];
     component inputRangeChecks[nInputs];
@@ -107,12 +109,17 @@ template JoinSplit(nInputs, nOutputs, treeDepth) {
         inputCommitments[i].token <== token;
         inputCommitments[i].amount <== valueIn[i];
 
+        // Derive path-direction bits from leavesIndices[i] (Num2Bits binds
+        // leavesIndices[i] === sum(bit[j]*2^j)); these feed the Merkle verifier.
+        inputLeafBits[i] = Num2Bits(treeDepth);
+        inputLeafBits[i].in <== leavesIndices[i];
+
         // Verify Merkle proof
         inputMerkle[i] = MerkleProofVerifier(treeDepth);
         inputMerkle[i].leaf <== inputCommitments[i].commitment;
         for (var j = 0; j < treeDepth; j++) {
             inputMerkle[i].path_elements[j] <== pathElements[i][j];
-            inputMerkle[i].path_indices[j] <== pathIndices[i][j];
+            inputMerkle[i].path_indices[j] <== inputLeafBits[i].out[j];
         }
         inputMerkle[i].root === merkleRoot;
 
@@ -133,6 +140,10 @@ template JoinSplit(nInputs, nOutputs, treeDepth) {
         // Accumulate input sum
         sumIn[i + 1] <== sumIn[i] + valueIn[i];
     }
+
+    // Duplicate input notes need no in-circuit distinctness check: identical
+    // notes yield identical nullifiers (index is path-bound above), and the
+    // on-chain nullifier registry rejects duplicates within a transaction.
 
     // ============================
     // 3. Process outputs
