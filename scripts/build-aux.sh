@@ -1,6 +1,6 @@
 #!/bin/bash
 # Compile + single-party Groth16 setup for auxiliary circuits
-# (proof_of_innocence, ownership, range_sum, range_sum_4, range_sum_16).
+# (ownership, range_sum, range_sum_4, range_sum_16).
 #
 # These don't follow the joinsplit_NxM tier structure, so they get their own
 # helper. Single-party "dev" setup — for production these need a real MPC
@@ -10,16 +10,18 @@
 #   bash scripts/build-aux.sh range_sum_4
 #   bash scripts/build-aux.sh range_sum_16
 #   bash scripts/build-aux.sh ownership
-#   bash scripts/build-aux.sh proof_of_innocence
 #
 # Requires: circom 2.x, npx snarkjs, and build/ptau/powersOfTau28_hez_final_18.ptau
-# (the existing ptau file is enough for circuits up to 2^18 constraints).
+# (the existing ptau file is enough for circuits up to 2^18 constraints; the
+# largest aux circuit, range_sum_16, is ~72.7k). The ptau is NOT in the repo —
+# fetch it from https://storage.googleapis.com/zkevm/ptau/ (the hermez S3 URL
+# this file used to point at is dead).
 
 set -e
 
 if [ $# -lt 1 ]; then
   echo "Usage: bash scripts/build-aux.sh <circuit_name>"
-  echo "Valid circuits: proof_of_innocence, ownership, range_sum, range_sum_4, range_sum_16"
+  echo "Valid circuits: ownership, range_sum, range_sum_4, range_sum_16"
   exit 1
 fi
 
