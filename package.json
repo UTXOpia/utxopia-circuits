@@ -7,6 +7,7 @@
     "compile": "bash scripts/compile.sh",
     "setup": "bash scripts/setup.sh",
     "test": "mocha test/*.test.js --timeout 60000",
+    "verify:cdn": "bash scripts/verify-cdn-vkeys.sh",
     "clean": "rm -rf build/"
   },
   "dependencies": {
