@@ -4,9 +4,9 @@ node_modules/
 # anchored on-chain via init/update_verification_key_hash). Larger artifacts
 # (wasm/zkey/ptau/r1cs) come from scripts/fetch-circuits.sh.
 build/*
-!build/joinsplit_*/
-build/joinsplit_*/*
-!build/joinsplit_*/*.vkey.json
+!build/*/
+build/*/*
+!build/*/*.vkey.json
 cdn-upload/
 build-*/
 cdn-upload-*/
